@@ -8,12 +8,9 @@ final class ProfileViewModel: ObservableObject {
     private let supabaseService: SupabaseServiceProtocol
     private let authService: PrivyAuthService
 
-    init(
-        supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
-        authService: PrivyAuthService = .shared
-    ) {
+    init(supabaseService: SupabaseServiceProtocol = SupabaseService.shared) {
         self.supabaseService = supabaseService
-        self.authService = authService
+        self.authService = PrivyAuthService.shared
     }
 
     func loadProfile() async {
@@ -31,10 +28,6 @@ final class ProfileViewModel: ObservableObject {
     }
 
     func signOut() async {
-        do {
-            try await authService.signOut()
-        } catch {
-            print("Failed to sign out: \(error)")
-        }
+        await authService.signOut()
     }
 }

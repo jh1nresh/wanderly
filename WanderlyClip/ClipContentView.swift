@@ -2,90 +2,22 @@ import SwiftUI
 import MapKit
 
 struct ClipContentView: View {
-    @State private var tripName: String = "Shared Trip"
-    @State private var stops: [ClipTripStop] = ClipTripStop.mockList
-    @State private var region = MKCoordinateRegion(
+    @State private var tripData: SharedTripData?
+    @State private var isLoading = true
+    @State private var cameraPosition: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-    )
+    ))
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Map preview
-                    Map(coordinateRegion: $region, annotationItems: stops) { stop in
-                        MapMarker(coordinate: stop.coordinate, tint: Color(hex: "C75B39"))
-                    }
-                    .frame(height: 200)
-                    .cornerRadius(16)
-                    .padding(.horizontal)
-
-                    // Trip info
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(tripName)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(Color(hex: "2C2C2E"))
-
-                        Text("\(stops.count) stops")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-
-                    // Stops list
-                    VStack(spacing: 12) {
-                        ForEach(stops) { stop in
-                            HStack(spacing: 12) {
-                                Image(systemName: "mappin.circle.fill")
-                                    .font(.title3)
-                                    .foregroundColor(Color(hex: "C75B39"))
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(stop.name)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(Color(hex: "2C2C2E"))
-                                    Text(stop.address)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-
-                                Spacer()
-                            }
-                            .padding(12)
-                            .background(Color(hex: "FFF8F0"))
-                            .cornerRadius(16)
-                        }
-                    }
-                    .padding(.horizontal)
-
-                    // CTA
-                    VStack(spacing: 12) {
-                        Button(action: {
-                            // TODO: Deep link to full app
-                        }) {
-                            Text("Open in Wanderly")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(Color(hex: "C75B39"))
-                                .cornerRadius(16)
-                        }
-
-                        Button(action: {
-                            // TODO: App Store link
-                        }) {
-                            Text("Get the Full App")
-                                .font(.subheadline)
-                                .foregroundColor(Color(hex: "C75B39"))
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 32)
+            Group {
+                if isLoading {
+                    loadingView
+                } else if let trip = tripData {
+                    tripContentView(trip)
+                } else {
+                    errorView
                 }
             }
             .background(Color(hex: "FFF8F0"))
@@ -95,35 +27,186 @@ struct ClipContentView: View {
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
             handleIncomingURL(activity.webpageURL)
         }
+        .onOpenURL { url in
+            handleIncomingURL(url)
+        }
+        .task {
+            // If no URL arrives after 1s, show mock data for demo
+            try? await Task.sleep(for: .seconds(1))
+            if tripData == nil {
+                tripData = SharedTripData.demo
+                updateCamera(for: SharedTripData.demo.stops)
+                isLoading = false
+            }
+        }
     }
+
+    // MARK: - Trip Content
+
+    private func tripContentView(_ trip: SharedTripData) -> some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                Map(position: $cameraPosition) {
+                    ForEach(trip.stops) { stop in
+                        Marker(stop.name, coordinate: stop.coordinate)
+                            .tint(Color(hex: "C75B39"))
+                    }
+                }
+                .frame(height: 200)
+                .cornerRadius(16)
+                .padding(.horizontal)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(trip.name)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(Color(hex: "2C2C2E"))
+
+                    Text("\(trip.stops.count) stops \(trip.city.isEmpty ? "" : "in \(trip.city)")")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+
+                VStack(spacing: 12) {
+                    ForEach(trip.stops) { stop in
+                        HStack(spacing: 12) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(Color(hex: "C75B39"))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Text(stop.name)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(Color(hex: "2C2C2E"))
+                                    Spacer()
+                                    if let time = stop.time {
+                                        Text(time)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                if !stop.address.isEmpty {
+                                    Text(stop.address)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                if let note = stop.note {
+                                    Text(note)
+                                        .font(.caption)
+                                        .foregroundColor(Color(hex: "C75B39").opacity(0.8))
+                                }
+                            }
+
+                            Spacer()
+                        }
+                        .padding(12)
+                        .background(Color(hex: "FFF8F0"))
+                        .cornerRadius(16)
+                    }
+                }
+                .padding(.horizontal)
+
+                VStack(spacing: 12) {
+                    Button(action: openInFullApp) {
+                        Text("Open in Wanderly")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color(hex: "C75B39"))
+                            .cornerRadius(16)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 32)
+            }
+        }
+    }
+
+    // MARK: - Loading / Error
+
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            ProgressView()
+                .tint(Color(hex: "C75B39"))
+            Text("Loading trip...")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var errorView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle")
+                .font(.largeTitle)
+                .foregroundColor(Color(hex: "C75B39"))
+            Text("Couldn't load this trip")
+                .font(.headline)
+                .foregroundColor(Color(hex: "2C2C2E"))
+            Text("The link may be invalid or expired.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - URL Handling
 
     private func handleIncomingURL(_ url: URL?) {
-        // TODO: Parse shared trip link and load trip data
-        guard let url = url else { return }
+        guard let url else { return }
         print("App Clip opened with URL: \(url)")
+
+        if let data = SharedTripData.from(url: url) {
+            tripData = data
+            updateCamera(for: data.stops)
+        }
+        // Invalid URL data → tripData stays nil → errorView shown
+        isLoading = false
+    }
+
+    private func updateCamera(for stops: [SharedTripData.SharedStop]) {
+        let lats = stops.map(\.lat)
+        let lngs = stops.map(\.lng)
+        guard let minLat = lats.min(), let maxLat = lats.max(),
+              let minLng = lngs.min(), let maxLng = lngs.max() else { return }
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLng + maxLng) / 2
+        )
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((maxLat - minLat) * 1.5, 0.01),
+            longitudeDelta: max((maxLng - minLng) * 1.5, 0.01)
+        )
+        cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
+    }
+
+    private func openInFullApp() {
+        guard let url = URL(string: "wanderly://trip") else { return }
+        UIApplication.shared.open(url)
     }
 }
 
-// MARK: - Clip Trip Stop Model
+// MARK: - Demo Data
 
-struct ClipTripStop: Identifiable {
-    let id: UUID
-    var name: String
-    var address: String
-    var latitude: Double
-    var longitude: Double
-
-    var coordinate: CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-    }
-}
-
-extension ClipTripStop {
-    static let mockList: [ClipTripStop] = [
-        ClipTripStop(id: UUID(), name: "Tartine Bakery", address: "600 Guerrero St, SF", latitude: 37.7614, longitude: -122.4241),
-        ClipTripStop(id: UUID(), name: "Dolores Park", address: "Dolores St, SF", latitude: 37.7596, longitude: -122.4269),
-        ClipTripStop(id: UUID(), name: "Bi-Rite Creamery", address: "3692 18th St, SF", latitude: 37.7618, longitude: -122.4256),
-    ]
+extension SharedTripData {
+    static let demo = SharedTripData(
+        name: "SF Food Tour",
+        city: "San Francisco",
+        stops: [
+            SharedStop(id: UUID(), name: "Tartine Bakery", address: "600 Guerrero St, SF", lat: 37.7614, lng: -122.4241, time: "9:00 AM", note: "Must try the morning bun"),
+            SharedStop(id: UUID(), name: "Dolores Park", address: "Dolores St, SF", lat: 37.7596, lng: -122.4269, time: "10:30 AM", note: nil),
+            SharedStop(id: UUID(), name: "Bi-Rite Creamery", address: "3692 18th St, SF", lat: 37.7618, lng: -122.4256, time: "12:00 PM", note: "Salted caramel ice cream"),
+        ]
+    )
 }
 
 // MARK: - Hex Color (standalone for App Clip target)
@@ -150,8 +233,4 @@ extension Color {
             opacity: Double(a) / 255
         )
     }
-}
-
-#Preview {
-    ClipContentView()
 }

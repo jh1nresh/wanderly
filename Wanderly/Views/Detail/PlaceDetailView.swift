@@ -135,11 +135,12 @@ struct PlaceDetailView: View {
                 }
 
                 // Mini map
-                Map(coordinateRegion: .constant(MKCoordinateRegion(
+                Map(position: .constant(.region(MKCoordinateRegion(
                     center: place.coordinate,
                     span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
-                )), annotationItems: [place]) { p in
-                    MapMarker(coordinate: p.coordinate, tint: Color.categoryColor(for: p.category))
+                )))) {
+                    Marker(place.name, coordinate: place.coordinate)
+                        .tint(Color.categoryColor(for: place.category))
                 }
                 .frame(height: 160)
                 .cornerRadius(16)

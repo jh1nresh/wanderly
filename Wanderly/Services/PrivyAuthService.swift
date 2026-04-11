@@ -1,16 +1,6 @@
-import Foundation
-
-// MARK: - Protocol
-
-protocol AuthServiceProtocol {
-    var isAuthenticated: Bool { get }
-    var currentUserId: String? { get }
-    func signInWithApple() async throws
-    func signInWithGoogle() async throws
-    func signInWithEmail(_ email: String) async throws
-    func verifyEmailCode(_ code: String) async throws
-    func signOut() async throws
-}
+import SwiftUI
+import AuthenticationServices
+import PrivySDK
 
 // MARK: - Auth State
 
@@ -23,27 +13,26 @@ enum AuthState: Equatable {
 // MARK: - Errors
 
 enum AuthError: LocalizedError {
-    case notConfigured
     case signInFailed(String)
-    case signOutFailed
     case invalidCode
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "Privy SDK not configured"
         case .signInFailed(let reason): return "Sign in failed: \(reason)"
-        case .signOutFailed: return "Sign out failed"
-        case .invalidCode: return "Invalid verification code"
+        case .invalidCode: return "No pending email — call signInWithEmail first"
         }
     }
 }
 
-// MARK: - Stub Implementation
+// MARK: - Privy Auth Service
 
-final class PrivyAuthService: ObservableObject, AuthServiceProtocol {
+@MainActor
+final class PrivyAuthService: ObservableObject {
     static let shared = PrivyAuthService()
 
-    @Published var authState: AuthState = .unauthenticated
+    let privy: Privy
+    @Published var authState: AuthState = .unknown
+    private var pendingEmail: String?
 
     var isAuthenticated: Bool {
         if case .authenticated = authState { return true }
@@ -55,43 +44,103 @@ final class PrivyAuthService: ObservableObject, AuthServiceProtocol {
         return nil
     }
 
-    private let appId: String?
+    private init() {
+        let appId    = Self.keyFromPlist("PRIVY_APP_ID")     ?? ""
+        let clientId = Self.keyFromPlist("PRIVY_APP_CLIENT_ID") ?? ""
+        let config   = PrivyConfig(appId: appId, appClientId: clientId)
+        self.privy   = PrivySdk.initialize(config: config)
 
-    init(appId: String? = nil) {
-        self.appId = appId ?? ProcessInfo.processInfo.environment["PRIVY_APP_ID"]
+        Task { await restoreSession() }
     }
+
+    // MARK: - Session Restore
+
+    func restoreSession() async {
+        let state = await privy.getAuthState()
+        applyPrivyState(state)
+    }
+
+    // MARK: - Apple
 
     func signInWithApple() async throws {
-        // TODO: Implement Privy Apple Sign In
-        // Privy.shared.loginWithApple()
-        await MainActor.run {
-            authState = .authenticated(userId: "mock-user-\(UUID().uuidString.prefix(8))")
-        }
+        let user = try await privy.oAuth.login(with: .apple)
+        authState = .authenticated(userId: user.id)
     }
+
+    // MARK: - Google
 
     func signInWithGoogle() async throws {
-        // TODO: Implement Privy Google Sign In
-        await MainActor.run {
-            authState = .authenticated(userId: "mock-user-\(UUID().uuidString.prefix(8))")
-        }
+        let user = try await privy.oAuth.login(with: .google)
+        authState = .authenticated(userId: user.id)
     }
 
+    // MARK: - Email OTP
+
     func signInWithEmail(_ email: String) async throws {
-        // TODO: Implement Privy Email OTP
-        // Privy.shared.sendOTP(to: email)
+        pendingEmail = email
+        try await privy.email.sendCode(to: email)
     }
 
     func verifyEmailCode(_ code: String) async throws {
-        // TODO: Implement Privy OTP verification
-        await MainActor.run {
-            authState = .authenticated(userId: "mock-user-\(UUID().uuidString.prefix(8))")
+        guard let email = pendingEmail else { throw AuthError.invalidCode }
+        let user = try await privy.email.loginWithCode(code, sentTo: email)
+        pendingEmail = nil
+        authState = .authenticated(userId: user.id)
+    }
+
+    // MARK: - Sign Out
+
+    func signOut() async {
+        let user = await privy.getUser()
+        await user?.logout()
+        authState = .unauthenticated
+    }
+
+    // MARK: - Helpers
+
+    private func applyPrivyState(_ state: PrivySDK.AuthState) {
+        switch state {
+        case .authenticated(let user):
+            authState = .authenticated(userId: user.id)
+        case .unauthenticated:
+            authState = .unauthenticated
+        case .notReady, .authenticatedUnverified:
+            authState = .unknown
+        @unknown default:
+            authState = .unknown
         }
     }
 
-    func signOut() async throws {
-        // TODO: Implement Privy sign out
-        await MainActor.run {
-            authState = .unauthenticated
-        }
+    private static func keyFromPlist(_ key: String) -> String? {
+        guard let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
+              let data = try? Data(contentsOf: url),
+              let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: String],
+              let value = dict[key],
+              value != "YOUR_KEY_HERE",
+              !value.isEmpty else { return nil }
+        return value
+    }
+}
+
+// MARK: - SignInWithApple Button (Privy-compatible)
+
+struct SignInWithAppleButton: UIViewRepresentable {
+    typealias UIViewType = ASAuthorizationAppleIDButton
+    var action: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+
+    func makeUIView(context: Context) -> ASAuthorizationAppleIDButton {
+        let button = ASAuthorizationAppleIDButton(type: .continue, style: .black)
+        button.addTarget(context.coordinator, action: #selector(Coordinator.tapped), for: .touchUpInside)
+        return button
+    }
+
+    func updateUIView(_ uiView: ASAuthorizationAppleIDButton, context: Context) {}
+
+    final class Coordinator: NSObject {
+        let action: () -> Void
+        init(action: @escaping () -> Void) { self.action = action }
+        @objc func tapped() { action() }
     }
 }

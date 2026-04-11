@@ -35,6 +35,9 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 
+# Secrets
+**/Secrets.plist
+
 # Environment
 .env
 .env.local

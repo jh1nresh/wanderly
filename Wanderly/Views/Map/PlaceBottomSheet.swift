@@ -93,7 +93,9 @@ struct PlaceBottomSheet: View {
 
             // Action buttons
             HStack(spacing: 12) {
-                Button(action: {}) {
+                Button(action: {
+                    NavigationService.navigate(to: place.coordinate, name: place.name)
+                }) {
                     Label("Navigate", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .font(.subheadline)
                         .fontWeight(.medium)

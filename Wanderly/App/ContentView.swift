@@ -1,35 +1,26 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var selectedTab = 0
+    @StateObject private var mapVM = MapViewModel()
+    @StateObject private var drawerVM = AIDrawerViewModel()
+    @State private var drawerDetent: PresentationDetent = .height(72)
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            MapView()
-                .tabItem {
-                    Label("Map", systemImage: "map.fill")
-                }
-                .tag(0)
-
-            PlaceListView()
-                .tabItem {
-                    Label("Places", systemImage: "list.bullet")
-                }
-                .tag(1)
-
-            TripPlannerView()
-                .tabItem {
-                    Label("Trips", systemImage: "airplane")
-                }
-                .tag(2)
-
-            ProfileView()
-                .tabItem {
-                    Label("Profile", systemImage: "person.fill")
-                }
-                .tag(3)
-        }
-        .tint(.wanderlyTerracotta)
+        MapView(viewModel: mapVM)
+            .sheet(isPresented: .constant(true)) {
+                AIDrawerView(viewModel: drawerVM, drawerDetent: $drawerDetent)
+                    .presentationDetents([.height(72), .medium, .large], selection: $drawerDetent)
+                    .presentationDragIndicator(.visible)
+                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                    .interactiveDismissDisabled(true)
+                    .presentationBackground(Color.wanderlyCream)
+            }
+            .onChange(of: drawerVM.mapAction) { _, action in
+                if let action { mapVM.apply(action) }
+            }
+            .onChange(of: mapVM.selectedPlace) { _, place in
+                if let place { drawerVM.showPlace(place) }
+            }
     }
 }
 

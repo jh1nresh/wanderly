@@ -1,0 +1,93 @@
+name: Wanderly
+options:
+  bundleIdPrefix: com.wanderly
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1,2"
+
+packages:
+  Privy:
+    url: https://github.com/privy-io/privy-ios
+    minorVersion: 2.10.1
+
+targets:
+  Wanderly:
+    type: application
+    platform: iOS
+    sources:
+      - path: Wanderly
+    dependencies:
+      - package: Privy
+        product: Privy
+    info:
+      path: Wanderly/Info.plist
+      properties:
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIApplicationSupportsIndirectInputEvents: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSLocationWhenInUseUsageDescription: "Wanderly needs your location to show nearby places on the map."
+        LSApplicationQueriesSchemes:
+          - comgooglemaps
+        CFBundleURLTypes:
+          - CFBundleURLName: com.wanderly.app
+            CFBundleURLSchemes:
+              - wanderly
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  WanderlyClip:
+    type: application.on-demand-install-capable
+    platform: iOS
+    sources:
+      - path: WanderlyClip
+    settings:
+      base:
+        INFOPLIST_GENERATION_MODE: GeneratedFile
+        PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.Clip
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
+        INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_NSAppClip:
+          NSAppClipRequestEphemeralUserNotification: false
+          NSAppClipRequestLocationConfirmation: false
+    dependencies:
+      - target: Wanderly
+        embed: false
+        link: false
+
+  WanderlyShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: WanderlyShareExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.ShareExtension
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: false
+        INFOPLIST_FILE: WanderlyShareExtension/Info.plist
+    dependencies:
+      - target: Wanderly
+        embed: false
+        link: false

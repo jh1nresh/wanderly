@@ -26,7 +26,7 @@ struct OnboardingView: View {
     ]
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
             TabView(selection: $currentPage) {
                 ForEach(pages.indices, id: \.self) { index in
                     VStack(spacing: 32) {
@@ -58,43 +58,46 @@ struct OnboardingView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
 
-            // Page indicators
-            HStack(spacing: 8) {
-                ForEach(pages.indices, id: \.self) { index in
-                    Capsule()
-                        .fill(index == currentPage ? Color.wanderlyTerracotta : Color.wanderlyTerracotta.opacity(0.3))
-                        .frame(width: index == currentPage ? 24 : 8, height: 8)
-                        .animation(.easeInOut(duration: 0.2), value: currentPage)
+            // Bottom controls
+            VStack(spacing: 0) {
+                // Page indicators
+                HStack(spacing: 8) {
+                    ForEach(pages.indices, id: \.self) { index in
+                        Capsule()
+                            .fill(index == currentPage ? Color.wanderlyTerracotta : Color.wanderlyTerracotta.opacity(0.3))
+                            .frame(width: index == currentPage ? 24 : 8, height: 8)
+                            .animation(.easeInOut(duration: 0.2), value: currentPage)
+                    }
                 }
-            }
-            .padding(.bottom, 32)
+                .padding(.bottom, 32)
 
-            // Button
-            Button(action: {
-                if currentPage < pages.count - 1 {
-                    withAnimation { currentPage += 1 }
-                } else {
-                    onComplete()
+                // Button
+                Button(action: {
+                    if currentPage < pages.count - 1 {
+                        withAnimation { currentPage += 1 }
+                    } else {
+                        onComplete()
+                    }
+                }) {
+                    Text(currentPage < pages.count - 1 ? "Next" : "Get Started")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.wanderlyTerracotta)
+                        .cornerRadius(16)
                 }
-            }) {
-                Text(currentPage < pages.count - 1 ? "Next" : "Get Started")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.wanderlyTerracotta)
-                    .cornerRadius(16)
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 16)
-
-            if currentPage < pages.count - 1 {
-                Button("Skip") {
-                    onComplete()
-                }
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .padding(.horizontal, 24)
                 .padding(.bottom, 16)
+
+                if currentPage < pages.count - 1 {
+                    Button("Skip") {
+                        onComplete()
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .padding(.bottom, 16)
+                }
             }
         }
         .background(Color.wanderlyCream)

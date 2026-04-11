@@ -36,6 +36,7 @@ struct SignInView: View {
     @State private var showEmailCode = false
     @State private var verificationCode = ""
     @State private var isLoading = false
+    @State private var errorMessage: String?
 
     var body: some View {
         VStack(spacing: 32) {
@@ -61,30 +62,24 @@ struct SignInView: View {
 
             // Auth buttons
             VStack(spacing: 12) {
-                Button(action: {
+                SignInWithAppleButton {
                     Task {
                         isLoading = true
                         defer { isLoading = false }
-                        try? await authService.signInWithApple()
+                        do { try await authService.signInWithApple() }
+                        catch { errorMessage = error.localizedDescription }
                     }
-                }) {
-                    HStack {
-                        Image(systemName: "apple.logo")
-                        Text("Continue with Apple")
-                    }
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.black)
-                    .cornerRadius(16)
                 }
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .cornerRadius(16)
 
                 Button(action: {
                     Task {
                         isLoading = true
                         defer { isLoading = false }
-                        try? await authService.signInWithGoogle()
+                        do { try await authService.signInWithGoogle() }
+                        catch { errorMessage = error.localizedDescription }
                     }
                 }) {
                     HStack {
@@ -117,14 +112,20 @@ struct SignInView: View {
 
                         Button("Send Code") {
                             Task {
-                                try? await authService.signInWithEmail(email)
-                                showEmailCode = true
+                                isLoading = true
+                                defer { isLoading = false }
+                                do {
+                                    try await authService.signInWithEmail(email)
+                                    showEmailCode = true
+                                } catch {
+                                    errorMessage = error.localizedDescription
+                                }
                             }
                         }
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(.wanderlyTerracotta)
-                        .disabled(email.isEmpty)
+                        .disabled(email.isEmpty || isLoading)
                     }
                     .padding()
                     .background(Color.white)
@@ -139,7 +140,8 @@ struct SignInView: View {
                             Task {
                                 isLoading = true
                                 defer { isLoading = false }
-                                try? await authService.verifyEmailCode(verificationCode)
+                                do { try await authService.verifyEmailCode(verificationCode) }
+                                catch { errorMessage = error.localizedDescription }
                             }
                         }
                         .font(.subheadline)
@@ -162,5 +164,10 @@ struct SignInView: View {
             }
         }
         .background(Color.wanderlyCream)
+        .alert("Sign In Failed", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("OK") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 }

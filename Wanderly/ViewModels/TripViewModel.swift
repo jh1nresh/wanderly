@@ -10,12 +10,9 @@ final class TripViewModel: ObservableObject {
     private let supabaseService: SupabaseServiceProtocol
     private let authService: PrivyAuthService
 
-    init(
-        supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
-        authService: PrivyAuthService = .shared
-    ) {
+    init(supabaseService: SupabaseServiceProtocol = SupabaseService.shared) {
         self.supabaseService = supabaseService
-        self.authService = authService
+        self.authService = PrivyAuthService.shared
     }
 
     func loadTrips() async {
