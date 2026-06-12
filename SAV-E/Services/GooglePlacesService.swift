@@ -90,6 +90,63 @@ struct PlaceProviderMatch: Identifiable, Codable, Hashable {
     }
 }
 
+struct ChinaPlaceResolverConfigurationStatus: Equatable {
+    var backendProxyConfigured: Bool
+    var amapConfigured: Bool
+    var baiduConfigured: Bool
+    var missingRequirements: [String]
+
+    var configuredProviders: [String] {
+        var providers: [String] = []
+        if backendProxyConfigured { providers.append("backend_proxy") }
+        if amapConfigured { providers.append("amap") }
+        if baiduConfigured { providers.append("baidu") }
+        return providers
+    }
+
+    var canResolveChinaPOI: Bool {
+        backendProxyConfigured || amapConfigured || baiduConfigured
+    }
+}
+
+enum ChinaPlaceResolverConfiguration {
+    static func status(
+        backendAPIBaseURL: String? = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
+        accessTokenProviderConfigured: Bool = true,
+        amapWebServiceKey: String? = configuredProviderValue(for: "AMAP_WEB_SERVICE_KEY"),
+        baiduMapWebServiceKey: String? = configuredProviderValue(for: "BAIDU_MAP_WEB_SERVICE_KEY")
+    ) -> ChinaPlaceResolverConfigurationStatus {
+        let backendProxyConfigured = backendAPIBaseURL != nil && accessTokenProviderConfigured
+        let amapConfigured = normalizedProviderValue(amapWebServiceKey, placeholder: "AMAP_WEB_SERVICE_KEY") != nil
+        let baiduConfigured = normalizedProviderValue(baiduMapWebServiceKey, placeholder: "BAIDU_MAP_WEB_SERVICE_KEY") != nil
+        var missing: [String] = []
+        if !backendProxyConfigured { missing.append("SAVE_API_URL with authenticated backend place resolver") }
+        if !amapConfigured { missing.append("AMAP_WEB_SERVICE_KEY") }
+        if !baiduConfigured { missing.append("BAIDU_MAP_WEB_SERVICE_KEY") }
+        return ChinaPlaceResolverConfigurationStatus(
+            backendProxyConfigured: backendProxyConfigured,
+            amapConfigured: amapConfigured,
+            baiduConfigured: baiduConfigured,
+            missingRequirements: missing
+        )
+    }
+
+    static func configuredProviderValue(for key: String, bundle: Bundle = .main) -> String? {
+        if let value = normalizedProviderValue(ProcessInfo.processInfo.environment[key], placeholder: key) {
+            return value
+        }
+        if let value = normalizedProviderValue(SAVEProductionConfig.keyFromPlist(key, bundle: bundle), placeholder: key) {
+            return value
+        }
+        return nil
+    }
+
+    static func normalizedProviderValue(_ value: String?, placeholder: String) -> String? {
+        guard let value = SAVEProductionConfig.normalizedConfigValue(value) else { return nil }
+        return value.uppercased() == placeholder.uppercased() ? nil : value
+    }
+}
+
 protocol PlaceResolverServiceProtocol {
     func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch]
 }
@@ -213,6 +270,10 @@ final class PlaceResolverService: PlaceResolverServiceProtocol {
 
         guard !results.isEmpty else { throw GooglePlacesError.noResults }
         return results
+    }
+
+    static func chinaProviderConfigurationStatus() -> ChinaPlaceResolverConfigurationStatus {
+        ChinaPlaceResolverConfiguration.status()
     }
 
     private func append(_ matches: [PlaceProviderMatch], to results: inout [PlaceProviderMatch], seen: inout Set<String>) {
@@ -392,8 +453,7 @@ final class AmapPlaceSearchService: AmapPlaceSearchServiceProtocol {
     init(apiKey: String? = nil) {
         self.apiKey = Self.normalizedAPIKey(
             apiKey
-                ?? ProcessInfo.processInfo.environment["AMAP_WEB_SERVICE_KEY"]
-                ?? SAVEProductionConfig.keyFromPlist("AMAP_WEB_SERVICE_KEY")
+                ?? ChinaPlaceResolverConfiguration.configuredProviderValue(for: "AMAP_WEB_SERVICE_KEY")
         )
     }
 
@@ -525,8 +585,7 @@ final class BaiduPlaceSearchService: BaiduPlaceSearchServiceProtocol {
     init(apiKey: String? = nil) {
         self.apiKey = Self.normalizedAPIKey(
             apiKey
-                ?? ProcessInfo.processInfo.environment["BAIDU_MAP_WEB_SERVICE_KEY"]
-                ?? SAVEProductionConfig.keyFromPlist("BAIDU_MAP_WEB_SERVICE_KEY")
+                ?? ChinaPlaceResolverConfiguration.configuredProviderValue(for: "BAIDU_MAP_WEB_SERVICE_KEY")
         )
     }
 

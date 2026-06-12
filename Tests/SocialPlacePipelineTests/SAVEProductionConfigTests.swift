@@ -50,6 +50,38 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
     }
 
+    func testChinaProviderConfigurationRejectsPlaceholderKeys() {
+        let status = ChinaPlaceResolverConfiguration.status(
+            backendAPIBaseURL: nil,
+            accessTokenProviderConfigured: false,
+            amapWebServiceKey: "AMAP_WEB_SERVICE_KEY",
+            baiduMapWebServiceKey: "BAIDU_MAP_WEB_SERVICE_KEY"
+        )
+
+        XCTAssertFalse(status.canResolveChinaPOI)
+        XCTAssertTrue(status.configuredProviders.isEmpty)
+        XCTAssertEqual(status.missingRequirements, [
+            "SAVE_API_URL with authenticated backend place resolver",
+            "AMAP_WEB_SERVICE_KEY",
+            "BAIDU_MAP_WEB_SERVICE_KEY"
+        ])
+    }
+
+    func testChinaProviderConfigurationReportsConfiguredProvidersWithoutLeakingKeys() {
+        let status = ChinaPlaceResolverConfiguration.status(
+            backendAPIBaseURL: "https://wanderly-api-production.up.railway.app",
+            accessTokenProviderConfigured: true,
+            amapWebServiceKey: "amap-test-key",
+            baiduMapWebServiceKey: "baidu-test-key"
+        )
+
+        XCTAssertTrue(status.canResolveChinaPOI)
+        XCTAssertEqual(status.configuredProviders, ["backend_proxy", "amap", "baidu"])
+        XCTAssertTrue(status.missingRequirements.isEmpty)
+        XCTAssertFalse(status.configuredProviders.contains("amap-test-key"))
+        XCTAssertFalse(status.configuredProviders.contains("baidu-test-key"))
+    }
+
     private func plistTemplate(at relativePath: String) throws -> [String: Any] {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
